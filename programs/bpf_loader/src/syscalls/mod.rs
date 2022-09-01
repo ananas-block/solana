@@ -48,6 +48,7 @@ use {
         precompiles::is_precompile,
         program::MAX_RETURN_DATA,
         program_stubs::is_nonoverlapping,
+        alt_bn128::prelude::*,
         pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN},
         secp256k1_recover::{
             Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
@@ -355,6 +356,28 @@ pub fn register_syscalls(
         SyscallGetStackHeight::init,
         SyscallGetStackHeight::call,
     )?;
+
+    // alt_bn128 addition
+    syscall_registry.register_syscall_by_name(
+        b"sol_alt_bn128_addition",
+        SyscallAltBn128Addition::init,
+        SyscallAltBn128Addition::call,
+    )?;
+
+    // alt_bn128 multiplication
+    syscall_registry.register_syscall_by_name(
+        b"sol_alt_bn128_multiplication",
+        SyscallAltBn128Multiplication::init,
+        SyscallAltBn128Multiplication::call,
+    )?;
+
+    // alt_bn128 pairing
+    syscall_registry.register_syscall_by_name(
+        b"sol_alt_bn128_pairing",
+        SyscallAltBn128Pairing::init,
+        SyscallAltBn128Pairing::call,
+    )?;
+
 
     Ok(syscall_registry)
 }
@@ -1848,6 +1871,213 @@ declare_syscall!(
         );
 
         *result = Ok(invoke_context.get_stack_height() as u64);
+    }
+);
+
+declare_syscall!(
+    /// alt_bn128 addition
+    SyscallAltBn128Addition,
+    fn call(
+        &mut self,
+        input_addr: u64,
+        input_size: u64,
+        result_addr: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &mut MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+        let budget = invoke_context.get_compute_budget();
+
+        question_mark!(
+            invoke_context
+                .get_compute_meter()
+                .consume(budget.alt_bn128_addition_cost),
+            result
+        );
+
+        let input = question_mark!(
+            translate_slice::<u8>(
+                memory_mapping,
+                input_addr,
+                input_size,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
+        ),
+            result
+        );
+
+        let call_result = question_mark!(
+            translate_slice_mut::<u8>(
+                memory_mapping,
+                result_addr,
+                ALT_BN128_ADDITION_OUTPUT_LEN as u64,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
+            ),
+            result
+        );
+
+        let result_point = match alt_bn128_addition(input) {
+            Ok(result_point) => result_point,
+            Err(e) => {
+                *result = Ok(e.into());
+                return;
+            }
+        };
+
+        if result_point.len() != ALT_BN128_ADDITION_OUTPUT_LEN {
+            *result = Ok(AltBn128Error::SliceOutOfBounds.into());
+            return;
+        }
+
+        call_result.copy_from_slice(&result_point);
+        *result = Ok(SUCCESS);
+    }
+);
+
+
+declare_syscall!(
+    /// alt_bn128 scalar multiplication
+    SyscallAltBn128Multiplication,
+    fn call(
+        &mut self,
+        input_addr: u64,
+        input_size: u64,
+        result_addr: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &mut MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+        // let cost = invoke_context
+        //     .get_compute_budget()
+        //     .alt_bn128_multiplication_cost;
+        // question_mark!(invoke_context.get_compute_meter().consume(cost), result);
+        let budget = invoke_context.get_compute_budget();
+
+        question_mark!(
+            invoke_context
+                .get_compute_meter()
+                .consume(budget.alt_bn128_multiplication_cost),
+            result
+        );
+        // let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
+        let input = question_mark!(
+            translate_slice::<u8>(memory_mapping, input_addr, input_size,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
+            ),
+            result
+        );
+        let call_result = question_mark!(
+            translate_slice_mut::<u8>(
+                memory_mapping,
+                result_addr,
+                ALT_BN128_MULTIPLICATION_OUTPUT_LEN as u64,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
+            ),
+            result
+        );
+
+        let result_point = match alt_bn128_multiplication(input) {
+            Ok(result_point) => result_point,
+            Err(e) => {
+                *result = Ok(e.into());
+                return;
+            }
+        };
+
+        if result_point.len() != ALT_BN128_MULTIPLICATION_OUTPUT_LEN {
+            *result = Ok(AltBn128Error::SliceOutOfBounds.into());
+            return;
+        }
+
+        call_result.copy_from_slice(&result_point);
+        *result = Ok(SUCCESS);
+    }
+);
+
+declare_syscall!(
+    /// alt_bn128 pairing equation
+    SyscallAltBn128Pairing,
+    fn call(
+        &mut self,
+        input_addr: u64,
+        input_size: u64,
+        result_addr: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &mut MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+        let ele_len = input_size.saturating_div(ALT_BN128_PAIRING_ELEMENT_LEN as u64);
+        let cost = invoke_context
+            .get_compute_budget()
+            .alt_bn128_pairing_one_pair_cost_first
+            .saturating_add(
+                invoke_context
+                    .get_compute_budget()
+                    .alt_bn128_pairing_one_pair_cost_other
+                    .saturating_mul(ele_len.saturating_sub(1)),
+            )
+            .saturating_add(invoke_context.get_compute_budget().sha256_base_cost)
+            .saturating_add(input_size)
+            .saturating_add(ALT_BN128_PAIRING_OUTPUT_LEN as u64);
+
+        question_mark!(invoke_context.get_compute_meter().consume(cost), result);
+
+        // let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
+        let input = question_mark!(
+            translate_slice::<u8>(memory_mapping, input_addr, input_size, invoke_context.get_check_aligned(),
+            invoke_context.get_check_size()),
+            result
+        );
+        let call_result = question_mark!(
+            translate_slice_mut::<u8>(
+                memory_mapping,
+                result_addr,
+                ALT_BN128_PAIRING_OUTPUT_LEN as u64,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
+            ),
+            result
+        );
+
+        let result_point = match alt_bn128_pairing(input) {
+            Ok(result_point) => result_point,
+            Err(e) => {
+                *result = Ok(e.into());
+                return;
+            }
+        };
+
+        if result_point.len() != ALT_BN128_PAIRING_OUTPUT_LEN {
+            *result = Ok(AltBn128Error::SliceOutOfBounds.into());
+            return;
+        }
+
+        call_result.copy_from_slice(&result_point);
+        *result = Ok(SUCCESS);
     }
 );
 
