@@ -35,7 +35,6 @@ solana-frozen-abi = { path = "../../frozen-abi", version = "=1.11.10" }
 solana-frozen-abi-macro = { path = "../../frozen-abi/macro", version = "=1.11.10" }
 solana-sdk-macro = { path = "../macro", version = "=1.11.10" }
 thiserror = "1.0"
-static_assertions = "1.1.0"
 
 [target.'cfg(not(target_os = "solana"))'.dependencies]
 array-bytes = "=1.4.1"
