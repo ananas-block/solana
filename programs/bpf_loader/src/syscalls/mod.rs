@@ -30,6 +30,7 @@ use {
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
         account_info::AccountInfo,
+        alt_bn128::prelude::*,
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
@@ -48,7 +49,6 @@ use {
         precompiles::is_precompile,
         program::MAX_RETURN_DATA,
         program_stubs::is_nonoverlapping,
-        alt_bn128::prelude::*,
         pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN},
         secp256k1_recover::{
             Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
@@ -357,27 +357,26 @@ pub fn register_syscalls(
         SyscallGetStackHeight::call,
     )?;
 
-    // alt_bn128 addition
+    // Alt_bn128 addition
     syscall_registry.register_syscall_by_name(
         b"sol_alt_bn128_addition",
         SyscallAltBn128Addition::init,
         SyscallAltBn128Addition::call,
     )?;
 
-    // alt_bn128 multiplication
+    // Alt_bn128 multiplication
     syscall_registry.register_syscall_by_name(
         b"sol_alt_bn128_multiplication",
         SyscallAltBn128Multiplication::init,
         SyscallAltBn128Multiplication::call,
     )?;
 
-    // alt_bn128 pairing
+    // Alt_bn128 pairing
     syscall_registry.register_syscall_by_name(
         b"sol_alt_bn128_pairing",
         SyscallAltBn128Pairing::init,
         SyscallAltBn128Pairing::call,
     )?;
-
 
     Ok(syscall_registry)
 }
@@ -1909,7 +1908,7 @@ declare_syscall!(
                 input_size,
                 invoke_context.get_check_aligned(),
                 invoke_context.get_check_size(),
-        ),
+            ),
             result
         );
 
@@ -1942,7 +1941,6 @@ declare_syscall!(
     }
 );
 
-
 declare_syscall!(
     /// alt_bn128 scalar multiplication
     SyscallAltBn128Multiplication,
@@ -1962,10 +1960,7 @@ declare_syscall!(
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
-        // let cost = invoke_context
-        //     .get_compute_budget()
-        //     .alt_bn128_multiplication_cost;
-        // question_mark!(invoke_context.get_compute_meter().consume(cost), result);
+
         let budget = invoke_context.get_compute_budget();
 
         question_mark!(
@@ -1974,9 +1969,12 @@ declare_syscall!(
                 .consume(budget.alt_bn128_multiplication_cost),
             result
         );
-        // let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
+
         let input = question_mark!(
-            translate_slice::<u8>(memory_mapping, input_addr, input_size,
+            translate_slice::<u8>(
+                memory_mapping,
+                input_addr,
+                input_size,
                 invoke_context.get_check_aligned(),
                 invoke_context.get_check_size(),
             ),
@@ -2046,10 +2044,14 @@ declare_syscall!(
 
         question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
-        // let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
         let input = question_mark!(
-            translate_slice::<u8>(memory_mapping, input_addr, input_size, invoke_context.get_check_aligned(),
-            invoke_context.get_check_size()),
+            translate_slice::<u8>(
+                memory_mapping,
+                input_addr,
+                input_size,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size()
+            ),
             result
         );
         let call_result = question_mark!(

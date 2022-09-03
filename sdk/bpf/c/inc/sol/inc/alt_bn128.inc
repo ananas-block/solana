@@ -1,6 +1,6 @@
 #pragma once
 /**
- * @brief Solana keccak system call
+ * @brief Solana bn128 elliptic curve addition, multiplication, and pairing
 **/
 
 #include <sol/types.h>
@@ -11,8 +11,9 @@ extern "C" {
 
 /**
  * Length of a Addition on elliptic curves alt_bn128 result
- * #define ALT_BN128_ADDITION_OUTPUT_LEN 64
+ *
  */
+#define ALT_BN128_ADDITION_OUTPUT_LEN 64
 
 /**
  * Addition on elliptic curves alt_bn128
@@ -30,9 +31,9 @@ extern "C" {
 
 /**
  * Length of a Multiplication on elliptic curves alt_bn128 result
- * #define ALT_BN128_MULTIPLICATION_OUTPUT_LEN 64
-
+ *
  */
+#define ALT_BN128_MULTIPLICATION_OUTPUT_LEN 64
 
 /**
  * Multiplication on elliptic curves alt_bn128
@@ -50,8 +51,9 @@ extern "C" {
 
  /**
   * Length of a Pairing on elliptic curves alt_bn128 result
-  * #define ALT_BN128_PAIRING_OUTPUT_LEN 32
+  *
   */
+#define ALT_BN128_PAIRING_OUTPUT_LEN 32
 
 /**
  * Pairing on elliptic curves alt_bn128

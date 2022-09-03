@@ -5372,7 +5372,6 @@ dependencies = [
  "solana-frozen-abi 1.11.10",
  "solana-frozen-abi-macro 1.11.10",
  "solana-sdk-macro 1.11.10",
- "static_assertions",
  "thiserror",
  "tiny-bip39",
  "wasm-bindgen",
