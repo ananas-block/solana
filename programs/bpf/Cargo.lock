@@ -5444,8 +5444,8 @@ dependencies = [
  "num-traits",
  "parking_lot 0.12.1",
  "qstring",
- "semver 1.0.10",
- "solana-sdk 1.11.10",
+ "semver",
+ "solana-sdk 1.11.11",
  "thiserror",
  "uriparse",
 ]
