@@ -1,4 +1,4 @@
-//! Secp256k1Recover Syscall test
+//! Alt_bn128 Syscalls tests
 
 extern crate solana_program;
 use solana_program::{

@@ -30,7 +30,13 @@ use {
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
         account_info::AccountInfo,
-        alt_bn128::prelude::*,
+        alt_bn128::prelude::{
+            alt_bn128_addition, alt_bn128_multiplication, alt_bn128_pairing,
+            ALT_BN128_ADDITION_OUTPUT_LEN, ALT_BN128_MULTIPLICATION_OUTPUT_LEN,
+            ALT_BN128_PAIRING_OUTPUT_LEN,
+            ALT_BN128_PAIRING_ELEMENT_LEN,
+            AltBn128Error
+        },
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
