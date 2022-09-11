@@ -30,6 +30,8 @@ mod range_proof;
 mod sigma_proofs;
 #[cfg(not(target_os = "solana"))]
 mod transcript;
+#[cfg(not(target_os = "solana"))]
+mod merkle_tree;
 
 // TODO: re-organize visibility
 pub mod curve25519;
