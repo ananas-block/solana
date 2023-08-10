@@ -556,6 +556,9 @@ pub mod enable_bpf_loader_set_authority_checked_ix {
 pub mod enable_alt_bn128_syscall {
     solana_sdk::declare_id!("A16q37opZdQMCbe5qJ6xpBB9usykfv8jZaMkxvZQi4GJ");
 }
+pub mod enable_alt_bn128_compression_syscall {
+    solana_sdk::declare_id!("Compression111111111111111111111111111111111");
+}
 
 pub mod enable_program_redeployment_cooldown {
     solana_sdk::declare_id!("J4HFT8usBxpcF63y46t1upYobJgChmKyZPm5uTBRg25Z");
@@ -857,6 +860,7 @@ lazy_static! {
         (last_restart_slot_sysvar::id(), "enable new sysvar last_restart_slot"),
         (reduce_stake_warmup_cooldown::id(), "reduce stake warmup cooldown from 25% to 9%"),
         (timely_vote_credits::id(), "use timeliness of votes in determining credits to award"),
+        (enable_alt_bn128_compression_syscall::id(), "add alt_bn128 compression syscalls"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
