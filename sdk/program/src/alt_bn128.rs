@@ -12,8 +12,6 @@ mod consts {
     /// Input length for the add operation.
     pub const ALT_BN128_ADDITION_INPUT_LEN: usize = 128;
 
-    pub const ALT_BN128_COMPRESSED_ADDITION_INPUT_LEN: usize = 64;
-
     /// Input length for the multiplication operation.
     pub const ALT_BN128_MULTIPLICATION_INPUT_LEN: usize = 128;
 
@@ -22,8 +20,6 @@ mod consts {
 
     /// Output length for the add operation.
     pub const ALT_BN128_ADDITION_OUTPUT_LEN: usize = 64;
-
-    pub const ALT_BN128_COMPRESSED_ADDITION_OUTPUT_LEN: usize = 32;
 
     /// Output length for the multiplication operation.
     pub const ALT_BN128_MULTIPLICATION_OUTPUT_LEN: usize = 64;
@@ -58,14 +54,6 @@ pub enum AltBn128Error {
     TryIntoVecError(Vec<u8>),
     #[error("Failed to convert projective to affine g1")]
     ProjectiveToG1Failed,
-    #[error("Failed to decompress g1")]
-    DecompressingG1Failed,
-    #[error("Failed to decompress g2")]
-    DecompressingG2Failed,
-    #[error("Failed to compress affine g1")]
-    CompressingG1Failed,
-    #[error("Failed to compress affine g2")]
-    CompressingG2Failed,
 }
 
 impl From<u64> for AltBn128Error {
@@ -76,10 +64,6 @@ impl From<u64> for AltBn128Error {
             3 => AltBn128Error::SliceOutOfBounds,
             4 => AltBn128Error::TryIntoVecError(Vec::new()),
             5 => AltBn128Error::ProjectiveToG1Failed,
-            6 => AltBn128Error::DecompressingG1Failed,
-            7 => AltBn128Error::DecompressingG2Failed,
-            8 => AltBn128Error::CompressingG1Failed,
-            9 => AltBn128Error::CompressingG2Failed,
             _ => AltBn128Error::UnexpectedError,
         }
     }
@@ -93,10 +77,6 @@ impl From<AltBn128Error> for u64 {
             AltBn128Error::SliceOutOfBounds => 3,
             AltBn128Error::TryIntoVecError(_) => 4,
             AltBn128Error::ProjectiveToG1Failed => 5,
-            AltBn128Error::DecompressingG1Failed => 6,
-            AltBn128Error::DecompressingG2Failed => 7,
-            AltBn128Error::CompressingG1Failed => 8,
-            AltBn128Error::CompressingG2Failed => 9,
             AltBn128Error::UnexpectedError => 0,
         }
     }
@@ -112,7 +92,6 @@ pub struct PodG2(pub [u8; 128]);
 
 #[cfg(not(target_os = "solana"))]
 mod target_arch {
-
     use {
         super::*,
         ark_bn254::{self, Config},
@@ -131,10 +110,11 @@ mod target_arch {
             if bytes.0 == [0u8; 64] {
                 return Ok(G1::zero());
             }
-            println!("bytes: {:?}", bytes);
-
-            let g1 = Self::deserialize_with_mode(&bytes.0[..], Compress::No, Validate::Yes);
-            println!("g1: {:?}", g1);
+            let g1 = Self::deserialize_with_mode(
+                &*[&bytes.0[..], &[0u8][..]].concat(),
+                Compress::No,
+                Validate::Yes,
+            );
 
             match g1 {
                 Ok(g1) => {
@@ -175,153 +155,43 @@ mod target_arch {
         }
     }
 
-    impl PodG1 {
-        pub fn decompress(g1_bytes: &[u8]) -> Result<PodG1, AltBn128Error> {
-            let decompressed_g1 = G1::deserialize_with_mode(
-                convert_edianness_64(g1_bytes).as_slice(),
-                Compress::Yes,
-                Validate::No,
-            )
-            .map_err(|_| AltBn128Error::DecompressingG1Failed)?;
-            if decompressed_g1.is_zero() {
-                return Ok(PodG1([0u8; 64]));
-            }
-            let mut decompressed_g1_bytes = [0u8; 64];
-            decompressed_g1
-                .x
-                .serialize_with_mode(&mut decompressed_g1_bytes[..32], Compress::No)
-                .map_err(|_| AltBn128Error::DecompressingG1Failed)?;
-            decompressed_g1
-                .y
-                .serialize_with_mode(&mut decompressed_g1_bytes[32..], Compress::No)
-                .map_err(|_| AltBn128Error::DecompressingG1Failed)?;
-            Ok(PodG1(decompressed_g1_bytes))
-        }
-
-        pub fn compress(g1_bytes: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
-            let g1 = G1::deserialize_with_mode(
-                convert_edianness_64(g1_bytes).as_slice(),
-                Compress::No,
-                Validate::Yes,
-            )
-            .map_err(|_| AltBn128Error::DecompressingG1Failed)?;
-            let mut g1_bytes = Vec::new();
-            G1::serialize_compressed(&g1, &mut g1_bytes)
-                .map_err(|_| AltBn128Error::CompressingG2Failed)?;
-            Ok(convert_edianness_64(g1_bytes.as_slice()))
-        }
-    }
-
-    impl PodG2 {
-        pub fn decompress(g2_bytes: &[u8]) -> Result<PodG2, AltBn128Error> {
-            let decompressed_g2 =
-                G2::deserialize_compressed(convert_edianness_128(g2_bytes).as_slice())
-                    .map_err(|_| AltBn128Error::DecompressingG2Failed)?;
-            let mut decompressed_g2_bytes = [0u8; 128];
-            decompressed_g2
-                .x
-                .serialize_with_mode(&mut decompressed_g2_bytes[..64], Compress::No)
-                .map_err(|_| AltBn128Error::DecompressingG2Failed)?;
-            decompressed_g2
-                .y
-                .serialize_with_mode(&mut decompressed_g2_bytes[64..128], Compress::No)
-                .map_err(|_| AltBn128Error::DecompressingG2Failed)?;
-            Ok(PodG2(
-                convert_edianness_128(decompressed_g2_bytes.as_slice())
-                    .try_into()
-                    .map_err(AltBn128Error::TryIntoVecError)?,
-            ))
-        }
-
-        pub fn compress(g2_bytes: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
-            let g2 = G2::deserialize_with_mode(
-                convert_edianness_128(g2_bytes).as_slice(),
-                Compress::No,
-                Validate::No,
-            )
-            .map_err(|_| AltBn128Error::DecompressingG2Failed)?;
-            let mut g2_bytes = Vec::new();
-            G2::serialize_compressed(&g2, &mut g2_bytes)
-                .map_err(|_| AltBn128Error::CompressingG2Failed)?;
-            Ok(convert_edianness_128(g2_bytes.as_slice()))
-        }
-    }
-
-    pub fn alt_bn128_addition(input: &[u8], compressed: bool) -> Result<Vec<u8>, AltBn128Error> {
-        println!("input.len() = {}", input.len());
-        println!("compressed = {}", compressed);
-        let mut input: Vec<u8> = input.to_vec();
-
-        if !compressed && input.len() > ALT_BN128_ADDITION_INPUT_LEN {
-            return Err(AltBn128Error::InvalidInputData);
-        } else if compressed && input.len() > ALT_BN128_COMPRESSED_ADDITION_INPUT_LEN {
-            println!("here errors");
+    pub fn alt_bn128_addition(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
+        if input.len() > ALT_BN128_ADDITION_INPUT_LEN {
             return Err(AltBn128Error::InvalidInputData);
         }
-        println!("here {:?}", input);
-        let p: G1 = if !compressed {
-            input.resize(ALT_BN128_ADDITION_INPUT_LEN, 0);
 
-            PodG1(
-                convert_edianness_64(&input[..64])
-                    .try_into()
-                    .map_err(AltBn128Error::TryIntoVecError)?,
-            )
-            .try_into()?
-        } else {
-            // input.resize(ALT_BN128_COMPRESSED_ADDITION_INPUT_LEN, 0);
-            if input[0..32] == vec![0u8; 32] {
-                PodG1([0u8; 64]).try_into()?
-            } else {
-                PodG1::decompress(&input[0..32])?.try_into()?
-            }
-        };
-        println!("here1");
+        let mut input = input.to_vec();
+        input.resize(ALT_BN128_ADDITION_INPUT_LEN, 0);
 
-        let q: G1 = if !compressed {
-            PodG1(
-                convert_edianness_64(&input[64..ALT_BN128_ADDITION_INPUT_LEN])
-                    .try_into()
-                    .map_err(AltBn128Error::TryIntoVecError)?,
-            )
-            .try_into()?
-        } else {
-            if input[32..64] == vec![0u8; 32] {
-                PodG1([0u8; 64]).try_into()?
-            } else {
-                PodG1::decompress(&input[32..64])?.try_into()?
-            }
-        };
-        println!("here2");
+        let p: G1 = PodG1(
+            convert_edianness_64(&input[..64])
+                .try_into()
+                .map_err(AltBn128Error::TryIntoVecError)?,
+        )
+        .try_into()?;
+        let q: G1 = PodG1(
+            convert_edianness_64(&input[64..ALT_BN128_ADDITION_INPUT_LEN])
+                .try_into()
+                .map_err(AltBn128Error::TryIntoVecError)?,
+        )
+        .try_into()?;
 
         let result_point = p + q;
 
+        let mut result_point_data = [0u8; ALT_BN128_ADDITION_OUTPUT_LEN];
         let result_point_affine: G1 = result_point
             .try_into()
             .map_err(|_| AltBn128Error::ProjectiveToG1Failed)?;
-        println!("result_point_affine = {:?}", result_point_affine);
-        if compressed {
-            if result_point_affine.is_zero() {
-                return Ok(vec![0u8; ALT_BN128_COMPRESSED_ADDITION_OUTPUT_LEN]);
-            }
-            let mut result_point_data = [0u8; ALT_BN128_COMPRESSED_ADDITION_OUTPUT_LEN];
-            result_point_affine
-                .serialize_with_mode(&mut result_point_data[..], Compress::Yes)
-                .map_err(|_| AltBn128Error::InvalidInputData)?;
-            return Ok(convert_edianness_64(&result_point_data[..]).to_vec());
-        } else {
-            let mut result_point_data = [0u8; ALT_BN128_ADDITION_OUTPUT_LEN];
-            result_point_affine
-                .x
-                .serialize_with_mode(&mut result_point_data[..32], Compress::No)
-                .map_err(|_| AltBn128Error::InvalidInputData)?;
-            result_point_affine
-                .y
-                .serialize_with_mode(&mut result_point_data[32..], Compress::No)
-                .map_err(|_| AltBn128Error::InvalidInputData)?;
+        result_point_affine
+            .x
+            .serialize_with_mode(&mut result_point_data[..32], Compress::No)
+            .map_err(|_| AltBn128Error::InvalidInputData)?;
+        result_point_affine
+            .y
+            .serialize_with_mode(&mut result_point_data[32..], Compress::No)
+            .map_err(|_| AltBn128Error::InvalidInputData)?;
 
-            Ok(convert_edianness_64(&result_point_data[..]).to_vec())
-        }
+        Ok(convert_edianness_64(&result_point_data[..]).to_vec())
     }
 
     pub fn alt_bn128_multiplication(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
@@ -433,17 +303,11 @@ mod target_arch {
 #[cfg(target_os = "solana")]
 mod target_arch {
     use super::*;
-    pub fn alt_bn128_addition(input: &[u8], compressed: bool) -> Result<Vec<u8>, AltBn128Error> {
-        if compressed && input.len() > ALT_BN128_ADDITION_INPUT_LEN {
-            return Err(AltBn128Error::InvalidInputData);
-        } else if input.len() > ALT_BN128_ADDITION_INPUT_LEN_UNCOMPRESSED {
+    pub fn alt_bn128_addition(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
+        if input.len() > ALT_BN128_ADDITION_INPUT_LEN {
             return Err(AltBn128Error::InvalidInputData);
         }
-        let mut result_buffer = if compressed {
-            [0; ALT_BN128_COMPRESSED_ADDITION_OUTPUT_LEN]
-        } else {
-            [0; ALT_BN128_ADDITION_OUTPUT_LEN]
-        };
+        let mut result_buffer = [0; ALT_BN128_ADDITION_OUTPUT_LEN];
         let result = unsafe {
             crate::syscalls::sol_alt_bn128_group_op(
                 ALT_BN128_ADD,
@@ -506,17 +370,13 @@ mod target_arch {
 
 #[cfg(test)]
 mod tests {
-
     use {
-        super::*,
         crate::alt_bn128::{prelude::*, PodG1},
         ark_bn254::g1::G1Affine,
         ark_ec::AffineRepr,
-        ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress, Validate},
-        std::ops::Neg,
+        ark_serialize::{CanonicalSerialize, Compress},
     };
-    type G1 = ark_bn254::g1::G1Affine;
-    type G2 = ark_bn254::g2::G2Affine;
+
     #[test]
     fn zero_serialization_test() {
         let zero = G1Affine::zero();
@@ -622,53 +482,12 @@ mod tests {
 
         test_cases.iter().for_each(|test| {
             let input = array_bytes::hex2bytes_unchecked(&test.input);
-            let result = alt_bn128_addition(&input, false);
+            let result = alt_bn128_addition(&input);
             assert!(result.is_ok());
 
             let expected = array_bytes::hex2bytes_unchecked(&test.expected);
-            let mut expected_compressed = Vec::new();
-            let g1: G1 = G1::deserialize_with_mode(
-                change_endianness(&expected).as_slice(),
-                Compress::No,
-                Validate::No,
-            )
-            .unwrap();
-            G1::serialize_with_mode(&g1, &mut expected_compressed, Compress::Yes).unwrap();
-            let expected_compressed = change_endianness(&expected_compressed).to_vec();
 
             assert_eq!(result.unwrap(), expected);
-            let mut compressed_ref = Vec::new();
-            if input.len() < 64 {
-                compressed_ref = vec![0; input.len()];
-            } else {
-                let g1: G1 = G1::deserialize_with_mode(
-                    change_endianness(&input[0..64]).as_slice(),
-                    Compress::No,
-                    Validate::No,
-                )
-                .unwrap();
-                G1::serialize_with_mode(&g1, &mut compressed_ref, Compress::Yes).unwrap();
-                compressed_ref = change_endianness(&compressed_ref).to_vec();
-            }
-            let mut compressed_ref_1 = Vec::new();
-            if input.len() < 128 {
-            } else {
-                let g1: G1 = G1::deserialize_with_mode(
-                    change_endianness(&input[64..128]).as_slice(),
-                    Compress::No,
-                    Validate::No,
-                )
-                .unwrap();
-                G1::serialize_with_mode(&g1, &mut compressed_ref_1, Compress::Yes).unwrap();
-                compressed_ref_1 = change_endianness(&compressed_ref_1).to_vec();
-            }
-            let result = alt_bn128_addition(
-                &[compressed_ref.as_slice(), compressed_ref_1.as_slice()].concat(),
-                true,
-            );
-            println!("{:?}", result);
-            assert!(result.is_ok());
-            assert_eq!(result.unwrap(), expected_compressed[0..32]);
         });
     }
 
@@ -914,102 +733,5 @@ mod tests {
             let expected = array_bytes::hex2bytes_unchecked(&test.expected);
             assert_eq!(result.unwrap(), expected);
         });
-    }
-
-    fn change_endianness(bytes: &[u8]) -> Vec<u8> {
-        let mut vec = Vec::new();
-        for b in bytes.chunks(32) {
-            for byte in b.iter().rev() {
-                vec.push(*byte);
-            }
-        }
-        vec
-    }
-
-    fn convert_edianness_128(bytes: &[u8]) -> Vec<u8> {
-        bytes
-            .chunks(64)
-            .flat_map(|b| b.iter().copied().rev().collect::<Vec<u8>>())
-            .collect::<Vec<u8>>()
-    }
-
-    #[test]
-    fn alt_bn128_g1_compression() {
-        let g1_be = [
-            45, 206, 255, 166, 152, 55, 128, 138, 79, 217, 145, 164, 25, 74, 120, 234, 234, 217,
-            68, 149, 162, 44, 133, 120, 184, 205, 12, 44, 175, 98, 168, 172, 20, 24, 216, 15, 209,
-            175, 106, 75, 147, 236, 90, 101, 123, 219, 245, 151, 209, 202, 218, 104, 148, 8, 32,
-            254, 243, 191, 218, 122, 42, 81, 193, 84,
-        ];
-        let g1_le = change_endianness(&g1_be[0..64]).to_vec();
-        let g1: G1 =
-            G1::deserialize_with_mode(g1_le.as_slice(), Compress::No, Validate::Yes).unwrap();
-
-        let g1_neg = g1.clone().neg();
-        let mut g1_neg_be = [0u8; 64];
-        g1_neg
-            .x
-            .serialize_with_mode(&mut g1_neg_be[..32], Compress::No)
-            .unwrap();
-        g1_neg
-            .y
-            .serialize_with_mode(&mut g1_neg_be[32..64], Compress::No)
-            .unwrap();
-        let g1_neg_be: [u8; 64] = change_endianness(&g1_neg_be[..]).try_into().unwrap();
-
-        let points = [(g1, g1_be), (g1_neg, g1_neg_be)];
-
-        for (point, _g1_be) in &points {
-            let mut compressed_ref = Vec::new();
-            G1::serialize_with_mode(point, &mut compressed_ref, Compress::Yes).unwrap();
-            let compressed_ref = change_endianness(&compressed_ref).to_vec();
-
-            let decompressed = PodG1::decompress(&compressed_ref).unwrap();
-
-            assert_eq!(PodG1::compress(&decompressed.0).unwrap(), compressed_ref);
-            assert_eq!(decompressed.0, *_g1_be);
-        }
-    }
-
-    #[test]
-    fn alt_bn128_g2_compression() {
-        let g2_be = [
-            40, 57, 233, 205, 180, 46, 35, 111, 215, 5, 23, 93, 12, 71, 118, 225, 7, 46, 247, 147,
-            47, 130, 106, 189, 184, 80, 146, 103, 141, 52, 242, 25, 0, 203, 124, 176, 110, 34, 151,
-            212, 66, 180, 238, 151, 236, 189, 133, 209, 17, 137, 205, 183, 168, 196, 92, 159, 75,
-            174, 81, 168, 18, 86, 176, 56, 16, 26, 210, 20, 18, 81, 122, 142, 104, 62, 251, 169,
-            98, 141, 21, 253, 50, 130, 182, 15, 33, 109, 228, 31, 79, 183, 88, 147, 174, 108, 4,
-            22, 14, 129, 168, 6, 80, 246, 254, 100, 218, 131, 94, 49, 247, 211, 3, 245, 22, 200,
-            177, 91, 60, 144, 147, 174, 90, 17, 19, 189, 62, 147, 152, 18,
-        ];
-        let g2_le = &*[&convert_edianness_128(&g2_be[..]), &[0u8][..]].concat();
-        let g2: G2 = G2::deserialize_with_mode(g2_le, Compress::No, Validate::Yes).unwrap();
-
-        let g2_neg = g2.clone().neg();
-        let mut g2_neg_be = [0u8; 128];
-        g2_neg
-            .x
-            .serialize_with_mode(&mut g2_neg_be[..64], Compress::No)
-            .map_err(|_| AltBn128Error::DecompressingG2Failed)
-            .unwrap();
-        g2_neg
-            .y
-            .serialize_with_mode(&mut g2_neg_be[64..128], Compress::No)
-            .map_err(|_| AltBn128Error::DecompressingG2Failed)
-            .unwrap();
-        let g2_neg_be: [u8; 128] = convert_edianness_128(&g2_neg_be[..]).try_into().unwrap();
-
-        let points = [(g2, g2_be), (g2_neg, g2_neg_be)];
-
-        for (point, _g2_be) in &points {
-            let mut compressed_ref = Vec::new();
-            G2::serialize_with_mode(point, &mut compressed_ref, Compress::Yes).unwrap();
-            let compressed_ref = convert_edianness_128(&compressed_ref).to_vec();
-
-            let decompressed = PodG2::decompress(&compressed_ref).unwrap();
-
-            assert_eq!(PodG2::compress(&decompressed.0).unwrap(), compressed_ref);
-            assert_eq!(decompressed.0, *_g2_be);
-        }
     }
 }

@@ -35,10 +35,10 @@ use {
         feature_set::{
             self, blake3_syscall_enabled, curve25519_syscall_enabled,
             disable_cpi_setting_executable_and_rent_epoch, disable_deploy_of_alloc_free_syscall,
-            disable_fees_sysvar, enable_alt_bn128_syscall, enable_big_mod_exp_syscall,
-            enable_early_verification_of_account_modifications, enable_partitioned_epoch_reward,
-            error_on_syscall_bpf_function_hash_collisions, last_restart_slot_sysvar,
-            libsecp256k1_0_5_upgrade_enabled, reject_callx_r10,
+            disable_fees_sysvar, enable_alt_bn128_compression_syscall, enable_alt_bn128_syscall,
+            enable_big_mod_exp_syscall, enable_early_verification_of_account_modifications,
+            enable_partitioned_epoch_reward, error_on_syscall_bpf_function_hash_collisions,
+            last_restart_slot_sysvar, libsecp256k1_0_5_upgrade_enabled, reject_callx_r10,
             stop_sibling_instruction_search_at_parent, stop_truncating_strings_in_syscalls,
             switch_to_new_elf_parser,
         },
@@ -149,6 +149,8 @@ pub fn create_program_runtime_environment_v1<'a>(
     debugging_features: bool,
 ) -> Result<BuiltinProgram<InvokeContext<'a>>, Error> {
     let enable_alt_bn128_syscall = feature_set.is_active(&enable_alt_bn128_syscall::id());
+    let enable_alt_bn128_compression_syscall =
+        feature_set.is_active(&enable_alt_bn128_compression_syscall::id());
     let enable_big_mod_exp_syscall = feature_set.is_active(&enable_big_mod_exp_syscall::id());
     let blake3_syscall_enabled = feature_set.is_active(&blake3_syscall_enabled::id());
     let curve25519_syscall_enabled = feature_set.is_active(&curve25519_syscall_enabled::id());
@@ -327,6 +329,14 @@ pub fn create_program_runtime_environment_v1<'a>(
 
     // Log data
     result.register_function(b"sol_log_data", SyscallLogData::call)?;
+
+    // Alt_bn128_compression
+    register_feature_gated_function!(
+        result,
+        enable_alt_bn128_compression_syscall,
+        b"sol_alt_bn128_compression",
+        SyscallAltBn128Compression::call,
+    )?;
 
     Ok(result)
 }
@@ -1772,6 +1782,109 @@ declare_syscall!(
         return_value.copy_from_slice(value.as_slice());
 
         Ok(0)
+    }
+);
+
+declare_syscall!(
+    /// alt_bn128 g1 and g2 compression and decompression
+    SyscallAltBn128Compression,
+    fn inner_call(
+        invoke_context: &mut InvokeContext,
+        group_op: u64,
+        input_addr: u64,
+        input_size: u64,
+        result_addr: u64,
+        _arg5: u64,
+        memory_mapping: &mut MemoryMapping,
+    ) -> Result<u64, Error> {
+        use solana_sdk::alt_bn128_compression::prelude::{
+            alt_bn128_compression_g1_compress, alt_bn128_compression_g1_decompress,
+            alt_bn128_compression_g2_compress, alt_bn128_compression_g2_decompress,
+            ALT_BN128_COMPRESSION_G1_COMPRESS, ALT_BN128_COMPRESSION_G1_DECOMPRESS,
+            ALT_BN128_COMPRESSION_G2_COMPRESS, ALT_BN128_COMPRESSION_G2_DECOMPRESS, G1,
+            G1_COMPRESSED, G2, G2_COMPRESSED,
+        };
+        let budget = invoke_context.get_compute_budget();
+        let (cost, output): (u64, usize) = match group_op {
+            ALT_BN128_COMPRESSION_G1_COMPRESS => (budget.alt_bn128_addition_cost, G1_COMPRESSED),
+            ALT_BN128_COMPRESSION_G1_DECOMPRESS => (budget.alt_bn128_multiplication_cost, G1),
+            ALT_BN128_COMPRESSION_G2_COMPRESS => (budget.alt_bn128_addition_cost, G2_COMPRESSED),
+            ALT_BN128_COMPRESSION_G2_DECOMPRESS => (budget.alt_bn128_multiplication_cost, G2),
+
+            _ => {
+                return Err(SyscallError::InvalidAttribute.into());
+            }
+        };
+
+        consume_compute_meter(invoke_context, cost)?;
+
+        let input = translate_slice::<u8>(
+            memory_mapping,
+            input_addr,
+            input_size,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
+        )?;
+
+        let call_result = translate_slice_mut::<u8>(
+            memory_mapping,
+            result_addr,
+            output as u64,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
+        )?;
+
+        match group_op {
+            ALT_BN128_COMPRESSION_G1_COMPRESS => {
+                let result_point = match alt_bn128_compression_g1_compress(input) {
+                    Ok(result_point) => result_point,
+                    Err(e) => {
+                        return Ok(e.into());
+                    }
+                };
+                call_result.copy_from_slice(&result_point);
+                Ok(SUCCESS)
+            }
+            ALT_BN128_COMPRESSION_G1_DECOMPRESS => {
+                let result_point = match alt_bn128_compression_g1_decompress(input) {
+                    Ok(result_point) => result_point,
+                    Err(e) => {
+                        return Ok(e.into());
+                    }
+                };
+                call_result.copy_from_slice(&result_point);
+                Ok(SUCCESS)
+            }
+            ALT_BN128_COMPRESSION_G2_COMPRESS => {
+                let result_point = match alt_bn128_compression_g2_compress(input) {
+                    Ok(result_point) => result_point,
+                    Err(e) => {
+                        return Ok(e.into());
+                    }
+                };
+                call_result.copy_from_slice(&result_point);
+                Ok(SUCCESS)
+            }
+            ALT_BN128_COMPRESSION_G2_DECOMPRESS => {
+                let result_point = match alt_bn128_compression_g2_decompress(input) {
+                    Ok(result_point) => result_point,
+                    Err(e) => {
+                        return Ok(e.into());
+                    }
+                };
+                call_result.copy_from_slice(&result_point);
+                Ok(SUCCESS)
+            }
+            _ => {
+                return Err(SyscallError::InvalidAttribute.into());
+            }
+        }
+
+        // if result_point.len() != output {
+        //     return Ok(AltBn128Error::SliceOutOfBounds.into());
+        // }
+
+        // call_result.copy_from_slice(&result_point);
     }
 );
 
