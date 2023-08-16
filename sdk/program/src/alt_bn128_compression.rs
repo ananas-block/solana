@@ -113,7 +113,7 @@ mod target_arch {
         let g1 = G1::deserialize_with_mode(
             convert_endianness::<32, 64>(&g1_bytes).as_slice(),
             Compress::No,
-            Validate::Yes,
+            Validate::No,
         )
         .map_err(|_| AltBn128CompressionError::CompressingG1Failed)?;
         let mut g1_bytes = [0u8; alt_bn128_compression_size::G1_COMPRESSED];
@@ -292,7 +292,7 @@ mod tests {
         ];
         let g1_le = convert_endianness::<32, 64>(&g1_be);
         let g1: G1 =
-            G1::deserialize_with_mode(g1_le.as_slice(), Compress::No, Validate::Yes).unwrap();
+            G1::deserialize_with_mode(g1_le.as_slice(), Compress::No, Validate::No).unwrap();
 
         let g1_neg = g1.clone().neg();
         let mut g1_neg_be = [0u8; 64];
@@ -337,7 +337,7 @@ mod tests {
         ];
         let g2_le = convert_endianness::<64, 128>(&g2_be);
         let g2: G2 =
-            G2::deserialize_with_mode(g2_le.as_slice(), Compress::No, Validate::Yes).unwrap();
+            G2::deserialize_with_mode(g2_le.as_slice(), Compress::No, Validate::No).unwrap();
 
         let g2_neg = g2.neg();
         let mut g2_neg_be = [0u8; 128];

@@ -92,6 +92,7 @@ curve25519-dalek = { workspace = true }
 hex = { workspace = true }
 static_assertions = { workspace = true }
 tiny-bip39 = { workspace = true }
+criterion = "0.3"
 
 [build-dependencies]
 rustc_version = { workspace = true }
@@ -101,3 +102,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[[bench]]
+name = "altb128_compression"
+harness = false
