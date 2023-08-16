@@ -32,6 +32,8 @@ pub enum AltBn128CompressionError {
     CompressingG1Failed,
     #[error("Failed to compress affine g2")]
     CompressingG2Failed,
+    #[error("Invalid input size")]
+    InvalidInputSize,
 }
 
 impl From<u64> for AltBn128CompressionError {
@@ -41,6 +43,7 @@ impl From<u64> for AltBn128CompressionError {
             2 => AltBn128CompressionError::DecompressingG2Failed,
             3 => AltBn128CompressionError::CompressingG1Failed,
             4 => AltBn128CompressionError::CompressingG2Failed,
+            5 => AltBn128CompressionError::InvalidInputSize,
             _ => AltBn128CompressionError::UnexpectedError,
         }
     }
@@ -53,6 +56,7 @@ impl From<AltBn128CompressionError> for u64 {
             AltBn128CompressionError::DecompressingG2Failed => 2,
             AltBn128CompressionError::CompressingG1Failed => 3,
             AltBn128CompressionError::CompressingG2Failed => 4,
+            AltBn128CompressionError::InvalidInputSize => 5,
             AltBn128CompressionError::UnexpectedError => 0,
         }
     }
@@ -75,7 +79,7 @@ mod target_arch {
     ) -> Result<[u8; alt_bn128_compression_size::G1], AltBn128CompressionError> {
         let g1_bytes: [u8; alt_bn128_compression_size::G1_COMPRESSED] = g1_bytes
             .try_into()
-            .map_err(|_| AltBn128CompressionError::DecompressingG1Failed)?;
+            .map_err(|_| AltBn128CompressionError::InvalidInputSize)?;
         if g1_bytes == [0u8; alt_bn128_compression_size::G1_COMPRESSED] {
             return Ok([0u8; alt_bn128_compression_size::G1]);
         }
@@ -102,7 +106,7 @@ mod target_arch {
     ) -> Result<[u8; alt_bn128_compression_size::G1_COMPRESSED], AltBn128CompressionError> {
         let g1_bytes: [u8; alt_bn128_compression_size::G1] = g1_bytes
             .try_into()
-            .map_err(|_| AltBn128CompressionError::DecompressingG1Failed)?;
+            .map_err(|_| AltBn128CompressionError::InvalidInputSize)?;
         if g1_bytes == [0u8; alt_bn128_compression_size::G1] {
             return Ok([0u8; alt_bn128_compression_size::G1_COMPRESSED]);
         }
@@ -123,7 +127,7 @@ mod target_arch {
     ) -> Result<[u8; alt_bn128_compression_size::G2], AltBn128CompressionError> {
         let g2_bytes: [u8; alt_bn128_compression_size::G2_COMPRESSED] = g2_bytes
             .try_into()
-            .map_err(|_| AltBn128CompressionError::DecompressingG2Failed)?;
+            .map_err(|_| AltBn128CompressionError::InvalidInputSize)?;
         if g2_bytes == [0u8; alt_bn128_compression_size::G2_COMPRESSED] {
             return Ok([0u8; alt_bn128_compression_size::G2]);
         }
@@ -147,7 +151,7 @@ mod target_arch {
     ) -> Result<[u8; alt_bn128_compression_size::G2_COMPRESSED], AltBn128CompressionError> {
         let g2_bytes: [u8; alt_bn128_compression_size::G2] = g2_bytes
             .try_into()
-            .map_err(|_| AltBn128CompressionError::CompressingG2Failed)?;
+            .map_err(|_| AltBn128CompressionError::InvalidInputSize)?;
         if g2_bytes == [0u8; alt_bn128_compression_size::G2] {
             return Ok([0u8; alt_bn128_compression_size::G2_COMPRESSED]);
         }
@@ -303,7 +307,7 @@ mod tests {
         let g1_neg_be: [u8; 64] = convert_endianness::<32, 64>(&g1_neg_be);
 
         let points = [(g1, g1_be), (g1_neg, g1_neg_be)];
-        println!("points g1: {:?}", points);
+
         for (point, _g1_be) in &points {
             let mut compressed_ref = [0u8; 32];
             G1::serialize_with_mode(point, compressed_ref.as_mut_slice(), Compress::Yes).unwrap();
@@ -348,7 +352,7 @@ mod tests {
         let g2_neg_be: [u8; 128] = convert_endianness::<64, 128>(&g2_neg_be);
 
         let points = [(g2, g2_be), (g2_neg, g2_neg_be)];
-        println!("points g2: {:?}", points);
+
         for (point, _g2_be) in &points {
             let mut compressed_ref = [0u8; 64];
             G2::serialize_with_mode(point, compressed_ref.as_mut_slice(), Compress::Yes).unwrap();

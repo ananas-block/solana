@@ -1790,7 +1790,7 @@ declare_syscall!(
     SyscallAltBn128Compression,
     fn inner_call(
         invoke_context: &mut InvokeContext,
-        group_op: u64,
+        op: u64,
         input_addr: u64,
         input_size: u64,
         result_addr: u64,
@@ -1805,7 +1805,7 @@ declare_syscall!(
             G1_COMPRESSED, G2, G2_COMPRESSED,
         };
         let budget = invoke_context.get_compute_budget();
-        let (cost, output): (u64, usize) = match group_op {
+        let (cost, output): (u64, usize) = match op {
             ALT_BN128_COMPRESSION_G1_COMPRESS => (budget.alt_bn128_addition_cost, G1_COMPRESSED),
             ALT_BN128_COMPRESSION_G1_DECOMPRESS => (budget.alt_bn128_multiplication_cost, G1),
             ALT_BN128_COMPRESSION_G2_COMPRESS => (budget.alt_bn128_addition_cost, G2_COMPRESSED),
@@ -1834,7 +1834,7 @@ declare_syscall!(
             invoke_context.get_check_size(),
         )?;
 
-        match group_op {
+        match op {
             ALT_BN128_COMPRESSION_G1_COMPRESS => {
                 let result_point = match alt_bn128_compression_g1_compress(input) {
                     Ok(result_point) => result_point,
@@ -1879,12 +1879,6 @@ declare_syscall!(
                 return Err(SyscallError::InvalidAttribute.into());
             }
         }
-
-        // if result_point.len() != output {
-        //     return Ok(AltBn128Error::SliceOutOfBounds.into());
-        // }
-
-        // call_result.copy_from_slice(&result_point);
     }
 );
 
