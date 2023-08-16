@@ -279,6 +279,7 @@ fn test_program_sbf_sanity() {
         programs.extend_from_slice(&[
             ("alloc", true),
             ("alt_bn128", true),
+            ("alt_bn128_compression", true),
             ("sbf_to_sbf", true),
             ("float", true),
             ("multiple_static", true),
