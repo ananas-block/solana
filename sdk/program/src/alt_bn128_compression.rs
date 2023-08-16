@@ -170,7 +170,6 @@ mod target_arch {
             .chunks_exact(CHUNK_SIZE)
             .flat_map(|chunk| chunk.iter().rev().copied())
             .enumerate()
-            .map(|(i, v)| (i, v))
             .fold([0u8; ARRAY_SIZE], |mut acc, (i, v)| {
                 acc[i] = v;
                 acc
@@ -209,7 +208,6 @@ mod target_arch {
     pub fn alt_bn128_compression_g1_decompress(
         input: &[u8],
     ) -> Result<[u8; G1], AltBn128CompressionError> {
-        println!("group_op: {}", group_op);
         let mut result_buffer = [0; G1];
         let result = unsafe {
             crate::syscalls::sol_alt_bn128_compression(

@@ -302,6 +302,7 @@ fn test_program_sbf_sanity() {
             ("solana_sbf_rust_128bit", true),
             ("solana_sbf_rust_alloc", true),
             ("solana_sbf_rust_alt_bn128", true),
+            ("solana_sbf_rust_alt_bn128_compression", true),
             ("solana_sbf_rust_curve25519", true),
             ("solana_sbf_rust_custom_heap", true),
             ("solana_sbf_rust_dep_crate", true),
