@@ -1887,9 +1887,7 @@ declare_syscall!(
                 call_result.copy_from_slice(&result_point);
                 Ok(SUCCESS)
             }
-            _ => {
-                return Err(SyscallError::InvalidAttribute.into());
-            }
+            _ => Err(SyscallError::InvalidAttribute.into()),
         }
     }
 );
